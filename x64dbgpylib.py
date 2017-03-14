@@ -37,14 +37,13 @@ __VERSION__ = '1.0'
 # This library allows you to run mona.py
 # under x64dbg, using the x64dbgpy plugin
 #
-#from pykd import *
+import pykd
 import os
 import binascii
 import struct
 import traceback
 import pickle
 import ctypes
-from ctypes import *
 
 global MemoryPages
 global AsmCache
@@ -63,10 +62,10 @@ ModuleCache = {}
 PEBModList = {}
 
 Registers32BitsOrder = ["EAX", "ECX", "EDX", "EBX", "ESP", "EBP", "ESI", "EDI"]
-Registers64BitsOrder = ["RAX", "RCX", "EDX", "RBX", "RSP", "RBP",
-                        "RSI", "RDI", "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15"]
+Registers64BitsOrder = ["RAX", "RCX", "RDX", "RBX", "RSP", "RBP", "RSI", "RDI",
+                        "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15"]
 
-if is64bitSystem():
+if pykd.is64bitSystem():
     arch = 64
 
 
@@ -91,7 +90,7 @@ def getOSVersion():
 
 
 def getArchitecture():
-    if not is64bitSystem():
+    if not pykd.is64bitSystem():
         return 32
     else:
         return 64
@@ -103,7 +102,7 @@ def getNtHeaders(modulebase):
     else:
         ntheaders = "_IMAGE_NT_HEADERS"
 
-    return module("ntdll").typedVar(ntheaders, modulebase + ptrDWord(modulebase + 0x3c))
+    return pykd.module("ntdll").typedVar(ntheaders, modulebase + pykd.ptrDWord(modulebase + 0x3c))
 
 
 def clearvars():
@@ -127,7 +126,7 @@ def clearvars():
 
 def getPEBInfo():
     try:
-        return typedVar("ntdll!_PEB", getCurrentProcess())
+        return pykd.typedVar("ntdll!_PEB", pykd.getCurrentProcess())
     except:
         currversion = getPyKDVersion()
         print ""
@@ -172,11 +171,11 @@ def getPEBAddress():
 
 
 def getTEBInfo():
-    return typedVar("_TEB", getImplicitThread())
+    return pykd.typedVar("_TEB", pykd.getImplicitThread())
 
 
 def getTEBAddress():
-    tebinfo = dbgCommand("!teb")
+    tebinfo = pykd.dbgCommand("!teb")
     if len(tebinfo) > 0:
         teblines = tebinfo.split("\n")
         tebline = teblines[0]
@@ -289,7 +288,7 @@ def hex2bin(pattern):
 
 
 def getPyKDVersion():
-    currentversion = version
+    currentversion = pykd.version
     currversion = ""
     for versionpart in currentversion:
         if versionpart != " ":
@@ -368,11 +367,11 @@ def getModulesFromPEB():
     global PEBModList
     peb = getPEBInfo()
     imagenames = []
-    moduleLst = typedVarList(peb.Ldr.deref().InLoadOrderModuleList,
+    moduleLst = pykd.typedVarList(peb.Ldr.deref().InLoadOrderModuleList,
                              "ntdll!_LDR_DATA_TABLE_ENTRY", "InMemoryOrderLinks.Flink")
     if len(PEBModList) == 0:
         for mod in moduleLst:
-            thismod = loadUnicodeString(mod.BaseDllName).encode("utf8")
+            thismod = pykd.loadUnicodeString(mod.BaseDllName).encode("utf8")
             modparts = thismod.split("\\")
             modulename = modparts[len(modparts) - 1]
             fullpath = thismod
@@ -397,29 +396,29 @@ def getModulesFromPEB():
 
             if imagename in imagenames:
                 # duplicate name ?  Append _<baseaddress>
-                baseaddy = int(ptrDWord(mod.getAddress() + 0x20))
+                baseaddy = int(pykd.ptrDWord(mod.getAddress() + 0x20))
                 imagename = imagename + "_%08x" % baseaddy
 
             # check if module can be loaded
             try:
-                modcheck = module(imagename)
+                modcheck = pykd.module(imagename)
             except:
                 # change to image+baseaddress
-                baseaddy = int(ptrDWord(mod.getAddress() + 0x20))
+                baseaddy = int(pykd.ptrDWord(mod.getAddress() + 0x20))
                 imagename = "image%08x" % baseaddy
                 try:
-                    modcheck = module(imagename)
+                    modcheck = pykd.module(imagename)
                 except:
                     # try with base addy
                     try:
-                        modcheck = module(baseaddy)
+                        modcheck = pykd.module(baseaddy)
                         imagename = modcheck.name()
                         # print "Name: %s" % modcheck.name()
                         # print "Imagename: %s" % modcheck.image()
                     except:
                         # try finding it with windbg 'ln'
                         cmd2run = "ln 0x%08x" % baseaddy
-                        output = dbgCommand(cmd2run)
+                        output = pykd.dbgCommand(cmd2run)
                         if "!__ImageBase" in output:
                             outputlines = output.split("\n")
                             for l in outputlines:
@@ -429,7 +428,7 @@ def getModulesFromPEB():
                                     leftparts = leftpart.split(" ")
                                     imagename = leftparts[len(leftparts) - 1]
                         try:
-                            modcheck = module(imagename)
+                            modcheck = pykd.module(imagename)
                         except:
                             print ""
                             print "   *** Error parsing module '%s' ('%s') at 0x%08x ***" % (imagename, modulename, baseaddy)
@@ -453,7 +452,7 @@ def getModuleFromAddress(address):
     global ModuleCache
     # try fastest way first
     try:
-        thismod = module(address)
+        thismod = pykd.module(address)
         # if that worked, we could add it to the cache if needed
         modbase = thismod.begin()
         modsize = thismod.size()
@@ -475,11 +474,11 @@ def getModuleFromAddress(address):
         modend = modbase + modsize
         if (address >= modbase) and (address <= modend):
             # print "0x%08x belongs to %s" % (address,modname)
-            return module(modname)
+            return pykd.module(modname)
     # not cached, find it
     moduleLst = getModulesFromPEB()
     for mod in moduleLst:
-        thismod = loadUnicodeString(mod.BaseDllName).encode("utf8")
+        thismod = pykd.loadUnicodeString(mod.BaseDllName).encode("utf8")
         modparts = thismod.split("\\")
         modulename = modparts[len(modparts) - 1].lower()
         moduleparts = modulename.split(".")
@@ -497,7 +496,7 @@ def getModuleFromAddress(address):
         try:
             moduleLst = getModulesFromPEB()
             for mod in moduleLst:
-                thismod = loadUnicodeString(mod.BaseDllName).encode("utf8")
+                thismod = pykd.loadUnicodeString(mod.BaseDllName).encode("utf8")
                 modparts = thismod.split("\\")
                 thismodname = modparts[len(modparts) - 1]
                 moduleparts = thismodname.split(".")
@@ -509,9 +508,9 @@ def getModuleFromAddress(address):
                         cnt += 1
                     thismodname = thismodname.strip(".")
                 if thismodname.lower() == modulename.lower():
-                    baseaddy = int(ptrDWord(mod.getAddress() + 0x20))
+                    baseaddy = int(pykd.ptrDWord(mod.getAddress() + 0x20))
                     baseaddr = "%08x" % baseaddy
-                    lmcommand = dbgCommand("lm")
+                    lmcommand = pykd.dbgCommand("lm")
                     lmlines = lmcommand.split("\n")
                     foundinlm = False
                     for lmline in lmlines:
@@ -528,11 +527,11 @@ def getModuleFromAddress(address):
                         imagename = "image%s" % baseaddr.lower()
                         break
         except:
-            dprintln(traceback.format_exc())
+            pykd.dprintln(traceback.format_exc())
 
         try:
             modulename = imagename
-            thismod = module(imagename)
+            thismod = pykd.module(imagename)
             modbase = thismod.begin()
             modsize = thismod.size()
             modend = modbase + modsize
@@ -540,7 +539,7 @@ def getModuleFromAddress(address):
             if (address >= modbase) and (address <= modend):
                 return thismod
         except:
-            thismod = module(address)
+            thismod = pykd.module(address)
 
             modbase = thismod.begin()
             modsize = thismod.size()
@@ -586,8 +585,8 @@ class Debugger:
 
     def rVirtualAlloc(self, lpAddress, dwSize, flAllocationType, flProtect):
         PROCESS_ALL_ACCESS = (0x000F0000 | 0x00100000 | 0xFFF)
-        kernel32 = windll.kernel32
-        pid = getCurrentProcessId()
+        kernel32 = ctypes.windll.kernel32
+        pid = pykd.getCurrentProcessId()
         hprocess = kernel32.OpenProcess(PROCESS_ALL_ACCESS, False, pid)
         vaddr = kernel32.VirtualAllocEx(
             hprocess, lpAddress, dwSize, flAllocationType, flProtect)
@@ -603,8 +602,8 @@ class Debugger:
             origbytes = self.readMemory(lpAddress, 4)
         if lpflOldProtect > 0:
             PROCESS_ALL_ACCESS = (0x000F0000 | 0x00100000 | 0xFFF)
-            kernel32 = windll.kernel32
-            pid = getCurrentProcessId()
+            kernel32 = ctypes.windll.kernel32
+            pid = pykd.getCurrentProcessId()
             hprocess = kernel32.OpenProcess(PROCESS_ALL_ACCESS, False, pid)
             returnval = kernel32.VirtualProtectEx(
                 hprocess, lpAddress, dwSize, flNewProtect, lpflOldProtect)
@@ -831,7 +830,7 @@ class Debugger:
         if highlight == 1:
             showdml = True
             message = "<b>" + message + "</b>"
-        dprintln(self.toAsciiOnly(message), showdml)
+        pykd.dprintln(self.toAsciiOnly(message), showdml)
 
     def logLines(self, message, highlight=0, address=None, focus=0):
         allLines = message.split('\n')
@@ -864,8 +863,8 @@ class Debugger:
         peb = getPEBInfo()
         ProcessParameters = peb.ProcessParameters
         ImageFile = ProcessParameters + 0x3c
-        pImageFile = ptrDWord(ImageFile)
-        sImageFile = loadWStr(pImageFile).encode("utf8")
+        pImageFile = pykd.ptrDWord(ImageFile)
+        sImageFile = pykd.loadWStr(pImageFile).encode("utf8")
         sImageFilepieces = sImageFile.split("\\")
         return sImageFilepieces[len(sImageFilepieces) - 1]
 
@@ -874,7 +873,7 @@ class Debugger:
         offset = 0x20
         if arch == 64:
             offset = 0x40
-        pid = ptrDWord(teb + offset)
+        pid = pykd.ptrDWord(teb + offset)
         return pid
 
     """
@@ -910,7 +909,7 @@ class Debugger:
             regs.append("RIP")
         reginfo = {}
         for thisreg in regs:
-            reginfo[thisreg.upper()] = int(reg(thisreg))
+            reginfo[thisreg.upper()] = int(pykd.reg(thisreg))
         return reginfo
 
     """
@@ -919,7 +918,7 @@ class Debugger:
 
     def nativeCommand(self, cmd2run):
         try:
-            output = dbgCommand(cmd2run)
+            output = pykd.dbgCommand(cmd2run)
             return output
         except:
             # dprintln(traceback.format_exc())
@@ -934,11 +933,11 @@ class Debugger:
         sehchain = []
         # get top of chain
         teb = getTEBAddress()
-        nextrecord = ptrDWord(teb)
+        nextrecord = pykd.ptrDWord(teb)
         validrecord = True
-        while nextrecord != 0xffffffff and isValid(nextrecord):
-            nseh = ptrDWord(nextrecord)
-            seh = ptrDWord(nextrecord + 4)
+        while nextrecord != 0xffffffff and pykd.isValid(nextrecord):
+            nseh = pykd.ptrDWord(nextrecord)
+            seh = pykd.ptrDWord(nextrecord + 4)
             sehrecord = [nextrecord, seh]
             sehchain.append(sehrecord)
             nextrecord = nseh
@@ -952,27 +951,27 @@ class Debugger:
         try:
             # return hex2bin(''.join(("%02X" % n) for n in
             # loadBytes(location,size)))
-            return loadChars(location, size)
+            return pykd.loadChars(location, size)
         except:
             return ""
 
     def readString(self, location):
-        if isValid(location):
+        if pykd.isValid(location):
             try:
-                return loadCStr(location)
-            except MemoryException:
-                return loadChars(location, 0x100)
+                return pykd.loadCStr(location)
+            except pykd.MemoryException:
+                return pykd.loadChars(location, 0x100)
             except:
                 return ""
         else:
             return ""
 
     def readWString(self, location):
-        if isValid(location):
+        if pykd.isValid(location):
             try:
-                return loadWStr(location)
-            except MemoryException:
-                return loadWChars(location, 0x100)
+                return pykd.loadWStr(location)
+            except pykd.MemoryException:
+                return pykd.loadWChars(location, 0x100)
             except:
                 return ""
         return
@@ -986,7 +985,7 @@ class Debugger:
         return self.readMemory(start, size)
 
     def readLong(self, location):
-        return ptrDWord(location)
+        return pykd.ptrDWord(location)
 
     def writeMemory(self, location, data):
         putback = "eb 0x%08x" % location
@@ -1009,7 +1008,7 @@ class Debugger:
         if len(self.MemoryPages) == 0:
             while offset < endaddress:
                 try:
-                    startaddress, pagesize = findMemoryRegion(offset)
+                    startaddress, pagesize = pykd.findMemoryRegion(offset)
                     pageobj = wpage(startaddress, pagesize)
                     if not startaddress in self.MemoryPages:
                         self.MemoryPages[startaddress] = pageobj
@@ -1046,10 +1045,10 @@ class Debugger:
     def getHeapsAddress(self):
         allheaps = []
         peb = getPEBInfo()
-        nrofheaps = int(ptrDWord(peb + 0x88))
+        nrofheaps = int(pykd.ptrDWord(peb + 0x88))
         processheaps = int(peb.ProcessHeaps)
         for i in xrange(nrofheaps):
-            nextheap = ptrDWord(processheaps + (i * 4))
+            nextheap = pykd.ptrDWord(processheaps + (i * 4))
             if nextheap == 0x00000000:
                 break
             if not nextheap in allheaps:
@@ -1064,7 +1063,7 @@ class Debugger:
 
     def getAllThreads(self):
         allthreads = []
-        for thisthread in getProcessThreads():
+        for thisthread in pykd.getProcessThreads():
             allthreads.append(wthread(thisthread))
         return allthreads
 
@@ -1081,7 +1080,7 @@ class Debugger:
             thismod = None
             if modulename in PEBModList:
                 modentry = PEBModList[modulename]
-                thismod = module(modulename)
+                thismod = pykd.module(modulename)
 
             else:
                 # find a good one
@@ -1090,14 +1089,14 @@ class Debugger:
                     # 0 : file
                     # 1 : path
                     if modulename == modrecord[0]:
-                        thismod = module(modentry)
+                        thismod = pykd.module(modentry)
                         break
 
             if thismod == None:
                 # should never hit, as we have tested if modules can be loaded
                 # already
                 imagename = self.getImageNameForModule(self.origmodname)
-                thismod = module(str(imagename))
+                thismod = pykd.module(str(imagename))
 
             thisimagename = thismod.image()
             thismodname = thismod.name()
@@ -1135,7 +1134,7 @@ class Debugger:
             wmod.setDatabase(database)
             wmod.setVersion(thismodversion)
         except:
-            dprintln("** Error trying to process module %s" % modulename)
+            pykd.dprintln("** Error trying to process module %s" % modulename)
             # dprintln(traceback.format_exc())
             wmod = None
         return wmod
@@ -1155,12 +1154,12 @@ class Debugger:
             imagename = ""
             moduleLst = getModulesFromPEB()
             for mod in moduleLst:
-                thismod = loadUnicodeString(mod.BaseDllName).encode("utf8")
+                thismod = pykd.loadUnicodeString(mod.BaseDllName).encode("utf8")
                 modparts = thismod.split("\\")
                 thismodname = modparts[len(modparts) - 1]
                 moduleparts = thismodname.split(".")
                 if thismodname.lower() == modulename.lower():
-                    baseaddy = int(ptrDWord(mod.getAddress() + 0x20))
+                    baseaddy = int(pykd.ptrDWord(mod.getAddress() + 0x20))
                     baseaddr = "%08x" % baseaddy
                     lmcommand = self.nativeCommand("lm")
                     lmlines = lmcommand.split("\n")
@@ -1178,7 +1177,7 @@ class Debugger:
                         imagename = "image%s" % baseaddr.lower()
                     return imagename
         except:
-            dprintln(traceback.format_exc())
+            pykd.dprintln(traceback.format_exc())
         return None
 
     """
@@ -1195,7 +1194,7 @@ class Debugger:
         # go to correct location
         cmd2run = "u 0x%08x L%d" % (address, depth + 1)
         try:
-            disasmlist = dbgCommand(cmd2run)
+            disasmlist = pykd.dbgCommand(cmd2run)
             disasmLinesTmp = disasmlist.split("\n")
             disasmLines = []
             for line in disasmLinesTmp:
@@ -1225,7 +1224,7 @@ class Debugger:
         while True:
             cmd2run = "ub 0x%08x L%d" % (address, depth)
             try:
-                disasmlist = dbgCommand(cmd2run)
+                disasmlist = pykd.dbgCommand(cmd2run)
                 disasmLinesTmp = disasmlist.split("\n")
                 disasmLines = []
                 for line in disasmLinesTmp:
@@ -1248,16 +1247,16 @@ class Debugger:
 
     def assemble(self, instructions):
         allbytes = ""
-        address = reg("eip")
-        if not isValid(address):
+        address = pykd.reg("eip")
+        if not pykd.isValid(address):
             # assemble somewhere else - let's say at the ntdll entrypoint
-            thismod = module("ntdll")
+            thismod = pykd.module("ntdll")
             thismodbase = thismod.begin()
             ntHeader = getNtHeaders(thismodbase)
             entrypoint = ntHeader.OptionalHeader.AddressOfEntryPoint
             address = thismodbase + entrypoint
         allinstructions = instructions.lower().split("\n")
-        origbytes = loadChars(address, 20)
+        origbytes = pykd.loadChars(address, 20)
         cached = True
         for thisinstruction in allinstructions:
             thisinstruction = thisinstruction.strip(" ").lstrip(" ")
@@ -1266,7 +1265,7 @@ class Debugger:
                     "retn", "ret").replace("ret", "retn")
 
             if not thisinstruction in self.AsmCache:
-                objdisasm = disasm(address)
+                objdisasm = pykd.disasm(address)
                 try:
                     objdisasm.asm(thisinstruction)
                 except:
@@ -1284,7 +1283,7 @@ class Debugger:
             restorebytes = [''.join(bin2hex(origbyte))
                             for origbyte in origbytes]
             putback += ' '.join(restorebytes)
-            dbgCommand(putback)
+            pykd.dbgCommand(putback)
         return allbytes
 
     def getOpcode(self, address):
@@ -1300,7 +1299,7 @@ class Debugger:
     """
 
     def readString(self, address):
-        return loadCStr(address)
+        return pykd.loadCStr(address)
 
     """
     Breakpoints
@@ -1354,11 +1353,11 @@ class Debugger:
         if validtype:
             output = ""
             try:
-                output = dbgCommand(bpcommand)
+                output = pykd.dbgCommand(bpcommand)
             except:
                 if memType.upper() == "S":
                     bpcommand = "bp 0x%08x" % address
-                    output = dbgCommand(bpcommand)
+                    output = pykd.dbgCommand(bpcommand)
                 else:
                     self.log(
                         "** Unable to set memory breakpoint. Check alignment,")
@@ -1531,9 +1530,9 @@ class wmodule:
         if iatdir.Size > 0:
             iatAddr = self.modbase + iatdir.VirtualAddress
             for i in range(0, iatdir.Size / pSize):
-                iatEntry = ptrDWord(iatAddr + i * pSize)
+                iatEntry = pykd.ptrDWord(iatAddr + i * pSize)
                 if iatEntry != None and iatEntry != 0:
-                    symbolName = findSymbol(iatEntry)
+                    symbolName = pykd.findSymbol(iatEntry)
                     if "!" in symbolName:
                         iatlist[iatAddr + i * pSize] = symbolName
         return iatlist
@@ -1543,14 +1542,14 @@ class wmodule:
         if ntHeader.OptionalHeader.DataDirectory[0].Size > 0:
             eatAddr = self.modbase + \
                 ntHeader.OptionalHeader.DataDirectory[0].VirtualAddress
-            nr_of_names = ptrDWord(eatAddr + 0x18)
-            rva_of_names = self.modbase + ptrDWord(eatAddr + 0x20)
-            address_of_functions = self.modbase + ptrDWord(eatAddr + 0x1c)
+            nr_of_names = pykd.ptrDWord(eatAddr + 0x18)
+            rva_of_names = self.modbase + pykd.ptrDWord(eatAddr + 0x20)
+            address_of_functions = self.modbase + pykd.ptrDWord(eatAddr + 0x1c)
             for i in range(0, nr_of_names):
-                eatName = loadCStr(
-                    self.modbase + ptrDWord(rva_of_names + 4 * i))
+                eatName = pykd.loadCStr(
+                    self.modbase + pykd.ptrDWord(rva_of_names + 4 * i))
                 eatAddress = self.modbase + \
-                    ptrDWord(address_of_functions + 4 * i)
+                             pykd.ptrDWord(address_of_functions + 4 * i)
                 eatlist[eatName] = eatAddress
         return eatlist
 
@@ -1562,10 +1561,10 @@ class wmodule:
         for sectioncnt in xrange(nrsections):
             sectionstart = (ntHeader.OptionalHeader.getAddress(
             ) + sizeOptionalHeader) + (sectioncnt * sectionsize)
-            thissection = loadCStr(sectionstart)
+            thissection = pykd.loadCStr(sectionstart)
             if thissection == sectionname:
-                thissectionsize = ptrDWord(sectionstart + 0x8 + 0x8)
-                thissectionrva = ptrDWord(sectionstart + 0x4 + 0x8)
+                thissectionsize = pykd.ptrDWord(sectionstart + 0x8 + 0x8)
+                thissectionrva = pykd.ptrDWord(sectionstart + 0x4 + 0x8)
                 thissectionstart = self.modbase + thissectionrva
                 return thissectionstart
         return 0
@@ -1602,7 +1601,7 @@ class wpage():
     def getMemory(self):
         if self.getAccess() > 0x1:
             try:
-                data = loadChars(self.begin, self.size)
+                data = pykd.loadChars(self.begin, self.size)
                 return data
             except:
                 return None
@@ -1614,9 +1613,9 @@ class wpage():
             try:
                 nrofdwords = self.size / 4
                 delta = self.size - (nrofdwords * 4)
-                dwords = loadDWords(self.begin, nrofdwords)
+                dwords = pykd.loadDWords(self.begin, nrofdwords)
                 curpos = self.begin + (nrofdwords * 4)
-                remainingbytes = loadBytes(curpos, delta)
+                remainingbytes = pykd.loadBytes(curpos, delta)
                 allbytes = []
                 for dword in dwords:
                     dwordhex = "%08x" % dword
@@ -1666,7 +1665,7 @@ class wpage():
 
         if self.protect == None:
             try:
-                self.protect = getVaProtect(self.begin)
+                self.protect = pykd.getVaProtect(self.begin)
             except:
                 self.protect = 0x1
         if self.protect == 0x0:
@@ -1693,7 +1692,7 @@ class wpage():
             sectiontoreturn = ""
             imagename = getModuleFromAddress(self.begin)
             if not imagename == None:
-                thismod = module(imagename)
+                thismod = pykd.module(imagename)
                 thismodbase = thismod.begin()
                 thismodend = thismod.end()
                 if self.begin >= thismodbase and self.begin <= thismodend:
@@ -1706,9 +1705,9 @@ class wpage():
                     for sectioncnt in xrange(nrsections):
                         sectionstart = (ntHeader.OptionalHeader.getAddress(
                         ) + sizeOptionalHeader) + (sectioncnt * sectionsize)
-                        thissection = loadCStr(sectionstart)
-                        thissectionsize = ptrDWord(sectionstart + 0x8 + 0x8)
-                        thissectionrva = ptrDWord(sectionstart + 0x4 + 0x8)
+                        thissection = pykd.loadCStr(sectionstart)
+                        thissectionsize = pykd.ptrDWord(sectionstart + 0x8 + 0x8)
+                        thissectionrva = pykd.ptrDWord(sectionstart + 0x4 + 0x8)
                         thissectionstart = thismodbase + thissectionrva
                         thissectionend = thissectionstart + thissectionsize
                         if (thissectionstart <= self.begin) and (self.begin <= thissectionend):
@@ -1813,7 +1812,7 @@ class opcode:
         if self.instruction == "":
             disasmdata = ""
 
-            disasmlines = dbgCommand("u 0x%08x L 1" % self.address)
+            disasmlines = pykd.dbgCommand("u 0x%08x L 1" % self.address)
             for thisline in disasmlines.split("\n"):
                 if thisline.lower().startswith("%08x" % self.address):
                     disasmdata = thisline
@@ -1900,7 +1899,7 @@ class wthread:
         offset = 0x24
         if arch == 64:
             offset = 0x48
-        tid = ptrDWord(teb + offset)
+        tid = pykd.ptrDWord(teb + offset)
         return tid
 
 
