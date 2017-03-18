@@ -1,130 +1,138 @@
 import platform
+import traceback
+
+def notImplemented():
+    try:
+        raise NotImplementedError()
+    except:
+        traceback.print_stack()
+        raise
 
 def is64bitSystem():
     return platform.architecture()[0] == '64bit'
 
 def dbgCommand(command, suppressOutput = False):
-    raise
+    notImplemented()
 
 def dprintln(str, dml = False):
-    raise
+    notImplemented()
 
 def findMemoryRegion(va):
-    raise
+    notImplemented()
 
 def findSymbol(va):
-    raise
+    notImplemented()
 
 def getCurrentProcess():
-    raise
+    notImplemented()
 
 def getCurrentProcessId():
-    raise
+    notImplemented()
 
 def getImplicitThread():
     # returns the current TEB address
-    raise
+    notImplemented()
 
 def getProcessThreads():
     # returns a list of TEB addresses
-    raise
+    notImplemented()
 
 def getVaProtect(va):
-    raise
+    notImplemented()
 
 def isValid(va):
-    raise
+    notImplemented()
 
 def loadBytes(va, count):
-    raise
+    notImplemented()
 
 def loadChars(va, count):
-    raise
+    traceback.print_stack()
 
 def loadCStr(va):
-    raise
+    notImplemented()
 
 def loadDwords(va, count):
-    raise
+    notImplemented()
 
 def loadUnicodeString(va):
     # returns string inside UNICODE_STRING at va
-    raise
+    notImplemented()
 
 def loadWChars(va, count):
-    raise
+    notImplemented()
 
 def loadWStr(va):
-    raise
+    notImplemented()
 
 def ptrDWord(va):
-    raise
+    notImplemented()
 
 def reg(name):
-    raise
+    notImplemented()
 
 def typedVar(type, va):
-    raise
+    notImplemented()
 
 def typedVarList(va, type, flink):
-    raise
+    notImplemented()
 
 version = '0.3.2.1'
 
 def ptrPtr(va):
-    raise
+    notImplemented()
 
 class disasm:
     def __init__(self):
-        raise
+        notImplemented()
 
     def __init__(self, offset):
-        raise
+        notImplemented()
 
     def __str__(self):
-        raise
+        notImplemented()
 
     def asm(self, code):
-        raise
+        notImplemented()
 
     def begin(self):
-        raise
+        notImplemented()
 
     def current(self):
-        raise
+        notImplemented()
 
     def disasm(self):
-        raise
+        notImplemented()
 
     def disasm(self, offset):
-        raise
+        notImplemented()
 
     def ea(self):
-        raise
+        notImplemented()
 
     def findOffset(self, arg2):
-        raise
+        notImplemented()
 
     def instruction(self):
-        raise
+        notImplemented()
 
     def jump(self, arg2):
-        raise
+        notImplemented()
 
     def jumprel(self, arg2):
-        raise
+        notImplemented()
 
     def length(self):
-        raise
+        notImplemented()
 
     def opcode(self):
-        raise
+        notImplemented()
 
     def opmnemo(self):
-        raise
+        notImplemented()
 
     def reset(self):
-        raise
+        notImplemented()
 
 class DbgException(Exception):
     pass
@@ -134,91 +142,91 @@ class MemoryException(DbgException):
 
 class module:
     def __init__(self, name):
-        raise
+        notImplemented()
 
     def __getattr__(self, item):
-        raise
+        notImplemented()
 
     def __str__(self):
-        raise
+        notImplemented()
 
     def begin(self):
-        raise
+        notImplemented()
 
     def checksum(self):
-        raise
+        notImplemented()
 
     def containingRecord(self, arg2, arg3, arg4):
-        raise
+        notImplemented()
 
     def end(self):
-        raise
+        notImplemented()
 
     def enumSymbols(self, mask):
-        raise
+        notImplemented()
 
     def enumTypes(self, mask):
-        raise
+        notImplemented()
 
     def findSymbol(self, offset, showDisplacement = True):
-        raise
+        notImplemented()
 
     def findSymbolAndDisp(self, offset):
         # return (name, displacement)
-        raise
+        notImplemented()
 
     def getFixedFileInfo(self):
 
-        raise
+        notImplemented()
 
     def getVersion(self):
-        raise
+        notImplemented()
 
     def image(self):
-        raise
+        notImplemented()
 
     def name(self):
-        raise
+        notImplemented()
 
     def offset(self, symbol):
-        raise
+        notImplemented()
 
     def queryVersion(self, string):
-        raise
+        notImplemented()
 
     def reload(self):
-        raise
+        notImplemented()
 
     def rva(self, va):
-        raise
+        notImplemented()
 
     def size(self):
-        raise
+        notImplemented()
 
     def sizeof(self, type):
-        raise
+        notImplemented()
 
     def symfile(self):
-        raise
+        notImplemented()
 
     def timestamp(self):
-        raise
+        notImplemented()
 
     def type(self, name):
-        raise
+        notImplemented()
 
     def typedVar(self, offset):
-        raise
+        notImplemented()
 
     def typedVarArray(self, offset, name, count):
-        raise
+        notImplemented()
 
     def typedVarList(self, offset, name, flink):
-        raise
+        notImplemented()
 
     def um(self):
         # is user module
-        raise
+        notImplemented()
 
     def unloaded(self):
-        raise
+        notImplemented()
