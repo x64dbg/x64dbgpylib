@@ -77,6 +77,7 @@ def loadDwords(va, count):
     return A.tolist()
 
 def loadUnicodeString(va):
+    va = int(va)
     # https://msdn.microsoft.com/en-us/library/windows/desktop/aa380518(v=vs.85).aspx
     Length = script.ReadWord(va)
     va += 2
@@ -125,9 +126,9 @@ def typedVar(typename, va):
         peb.OSMinorVersion = typeInt16(va + archValue(0x00a8, 0x0000))
         peb.OSBuildNumber = typeInt8(va + archValue(0x00ac, 0x0000))
         return peb
-    elif typename == "_RTL_USER_PROCESS_PARAMETERS":
+    elif typename == "_PEB_LDR_DATA":
         # TODO: fill in x64 offsets
-        ldr = typeStruct("_RTL_USER_PROCESS_PARAMETERS", va)
+        ldr = typeStruct("_PEB_LDR_DATA", va)
         ldr.InLoadOrderModuleList = typeStruct("_LDR_DATA_TABLE_ENTRY", va + archValue(0x0014, 0x0000))
         return ldr
     elif typename == "_TEB":
@@ -135,10 +136,26 @@ def typedVar(typename, va):
         teb.Self = va
         return teb
     else:
+        print "typename: %s, va: %x" % (typename, va)
         notImplemented()
 
 def typedVarList(va, typename, flink):
-    notImplemented()
+    if typename == "ntdll!_LDR_DATA_TABLE_ENTRY" and flink == "InMemoryOrderLinks.Flink":
+        # TODO: fill in x64 offsets
+        va = script.ReadPtr(int(va) + archValue(0x0008, 0x0000))
+        result = []
+
+        while va != 0 and len(result) < 10:
+            print "%08x" % va
+            entry = typeStruct("_LDR_DATA_TABLE_ENTRY", va)
+            entry.BaseDllName = typeStruct("UNICODE_STRING", va + archValue(0x001c, 0x0000))
+            print "%08x" % int(entry.BaseDllName)
+            result.append(entry)
+            va = script.ReadPtr(va)
+            pass
+        return result
+    else:
+        notImplemented()
 
 class typeBase(object):
     def __init__(self, name, size, addr = 0):
@@ -267,8 +284,14 @@ class MemoryException(DbgException):
     pass
 
 class module:
-    def __init__(self, name):
-        notImplemented()
+    def __init__(self, arg):
+        if isinstance(arg, basestring):
+            self.name = arg
+            self.base = script.BaseFromName(arg)
+        else:
+            self.base = arg
+            self.name = script.NameFromAddr(arg)
+        self.size = script.SizeFromAddr(self.base)
 
     def __getattr__(self, item):
         notImplemented()
