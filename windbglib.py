@@ -44,6 +44,7 @@ import struct
 import traceback
 import pickle
 import ctypes
+import array
 
 global MemoryPages
 global AsmCache
@@ -582,11 +583,12 @@ class Debugger:
 		return vaddr
 
 	def rVirtualAlloc(self, lpAddress, dwSize, flAllocationType, flProtect):
-		PROCESS_ALL_ACCESS = ( 0x000F0000 | 0x00100000 | 0xFFF )
+		PROCESS_VM_OPERATION = 0x0008
 		kernel32 = ctypes.windll.kernel32
-		pid = pykd.getCurrentProcessId()
-		hprocess = kernel32.OpenProcess( PROCESS_ALL_ACCESS, False, pid )
+		pid = self.getDebuggedPid()
+		hprocess = kernel32.OpenProcess( PROCESS_VM_OPERATION, False, pid )
 		vaddr = kernel32.VirtualAllocEx(hprocess, lpAddress, dwSize, flAllocationType, flProtect)
+		kernel32.CloseHandle(hprocess)
 		return vaddr
 
 	def rVirtualProtect(self, lpAddress, dwSize, flNewProtect, lpflOldProtect = 0):
@@ -598,11 +600,12 @@ class Debugger:
 			lpflOldProtect = lpAddress
 			origbytes = self.readMemory(lpAddress,4)
 		if lpflOldProtect > 0:
-			PROCESS_ALL_ACCESS = ( 0x000F0000 | 0x00100000 | 0xFFF )
+			PROCESS_VM_OPERATION = 0x0008
 			kernel32 = ctypes.windll.kernel32
-			pid = pykd.getCurrentProcessId()
-			hprocess = kernel32.OpenProcess( PROCESS_ALL_ACCESS, False, pid )
+			pid = self.getDebuggedPid()
+			hprocess = kernel32.OpenProcess( PROCESS_VM_OPERATION, False, pid )
 			returnval = kernel32.VirtualProtectEx(hprocess, lpAddress, dwSize, flNewProtect, lpflOldProtect)
+			kernel32.CloseHandle(hprocess)
 			if mustrestore:
 				self.writeMemory(lpAddress,origbytes)
 			return returnval
@@ -862,13 +865,11 @@ class Debugger:
 		# http://www.nirsoft.net/kernel_struct/vista/RTL_USER_PROCESS_PARAMETERS.html
 		peb = getPEBInfo()
 		ProcessParameters = peb.ProcessParameters
-		offset = 0x3c
+		offset = 0x38
 		if arch == 64:
-			offset = 0x68
-		# ProcessParameters + offset = _RTL_USER_PROCESS_PARAMETERS.ImagePathName(_UNICODE_STRING).Buffer(WORD*)
-		ImageFile = ProcessParameters + offset
-		pImageFile = pykd.ptrPtr(ImageFile)
-		sImageFile = pykd.loadWStr(pImageFile).encode("utf8")
+			offset = 0x60
+		# ProcessParameters + offset = _RTL_USER_PROCESS_PARAMETERS.ImagePathName(_UNICODE_STRING)
+		sImageFile = pykd.loadUnicodeString(ProcessParameters + offset).encode("utf8")
 		sImageFilepieces = sImageFile.split("\\")
 		return sImageFilepieces[len(sImageFilepieces)-1]
 		
@@ -1004,12 +1005,9 @@ class Debugger:
 
 
 	def writeMemory(self,location,data):
-		putback = "eb 0x%08x" % location
-		thisbyte = ""
-		for origbyte in data:
-			thisbyte = bin2hex(origbyte)
-			putback += " %s" % thisbyte
-		self.nativeCommand(putback)
+		A = array.array('B')
+		A.fromstring(data)
+		pykd.writeBytes(location, A.tolist())
 		return
 
 	def writeLong(self,location,dword):
