@@ -14,6 +14,11 @@ def notImplemented():
         traceback.print_stack()
         raise
 
+def archValue(x32, x64):
+    if is64bitSystem():
+        return x64
+    return x32
+
 def is64bitSystem():
     return platform.architecture()[0] == '64bit'
 
@@ -72,7 +77,7 @@ def loadDwords(va, count):
     return A.tolist()
 
 def loadUnicodeString(va):
-    # http://www.nirsoft.net/kernel_struct/vista/UNICODE_STRING.html
+    # https://msdn.microsoft.com/en-us/library/windows/desktop/aa380518(v=vs.85).aspx
     Length = script.ReadWord(va)
     va += 2
     MaximumLength = script.ReadWord(va)
@@ -83,8 +88,8 @@ def loadUnicodeString(va):
     if Length > MaximumLength or not script.IsValidPtr(Buffer):
         raise DbgException('Corrupted UNICODE_STRING structure')
     A = array.array('u')
-    A.fromstring(script.Read(Buffer, Length * 2))
-    return A.tounicode()
+    A.fromstring(script.Read(Buffer, Length))
+    return A.tounicode().rstrip(u'\0')
 
 def loadWChars(va, count):
     A = array.array('u')
@@ -108,11 +113,90 @@ def reg(name):
 def ptrPtr(va):
     return script.ReadPtr(va)
 
-def typedVar(type, va):
+def typedVar(typename, va):
+    if typename == "ntdll!_PEB":
+        # TODO: fill in x64 offsets
+        peb = typeStruct("_PEB", va)
+        peb.Ldr = typePtr("_PEB_LDR_DATA*", va + archValue(0x000c, 0x0000))
+        peb.ProcessParameters = typePtr("_RTL_USER_PROCESS_PARAMETERS*", va + archValue(0x0010, 0x0000))
+        peb.NumberOfHeaps = typeInt32(va + archValue(0x008c, 0x0000))
+        peb.ProcessHeaps = typePtr("void**", va + archValue(0x0090, 0x0000))
+        peb.OSMajorVersion = typeInt16(va + archValue(0x00a4, 0x0000))
+        peb.OSMinorVersion = typeInt16(va + archValue(0x00a8, 0x0000))
+        peb.OSBuildNumber = typeInt8(va + archValue(0x00ac, 0x0000))
+        return peb
+    elif typename == "_RTL_USER_PROCESS_PARAMETERS":
+        # TODO: fill in x64 offsets
+        ldr = typeStruct("_RTL_USER_PROCESS_PARAMETERS", va)
+        ldr.InLoadOrderModuleList = typeStruct("_LDR_DATA_TABLE_ENTRY", va + archValue(0x0014, 0x0000))
+        return ldr
+    elif typename == "_TEB":
+        teb = typeStruct("_TEB", va)
+        teb.Self = va
+        return teb
+    else:
+        notImplemented()
+
+def typedVarList(va, typename, flink):
     notImplemented()
 
-def typedVarList(va, type, flink):
-    notImplemented()
+class typeBase(object):
+    def __init__(self, name, size, addr = 0):
+        self.name = name
+        self.size = size
+        self.addr = addr
+
+    def getAddress(self):
+        return self.addr
+
+    def __int__(self):
+        return self.getAddress()
+
+    def __add__(self, other):
+        return int(self) + other
+
+class typePrimitive(typeBase):
+    def __init__(self, name, size, addr = 0):
+        super(typePrimitive, self).__init__(name, size, addr)
+
+    def __int__(self):
+        if self.size == 1:
+            return script.ReadByte(self.addr)
+        elif self.size == 2:
+            return script.ReadWord(self.addr)
+        elif self.size == 4:
+            return script.ReadDword(self.addr)
+        elif self.size == 8:
+            return script.ReadQword(self.addr)
+        else:
+            notImplemented()
+
+class typeInt8(typePrimitive):
+    def __init__(self, addr = 0):
+        super(typeInt8, self).__init__("uint8_t", 1, addr)
+
+class typeInt16(typePrimitive):
+    def __init__(self, addr = 0):
+        super(typeInt16, self).__init__("uint16_t", 2, addr)
+
+class typeInt32(typePrimitive):
+    def __init__(self, addr = 0):
+        super(typeInt32, self).__init__("uint32_t", 4, addr)
+
+class typeInt64(typePrimitive):
+    def __init__(self, addr = 0):
+        super(typeInt64, self).__init__("uint64_t", 8, addr)
+
+class typePtr(typePrimitive):
+    def __init__(self, type = "void*", addr = 0):
+        super(typePtr, self).__init__(type, archValue(4, 8), addr)
+
+    def deref(self):
+        return typedVar(self.name[:-1], int(self))
+
+class typeStruct(typeBase):
+    def __init__(self, name, addr):
+        super(typeStruct, self).__init__(name, 0, addr)
 
 class memoryProtect(enum.Enum):
     PageExecute = 16
