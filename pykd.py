@@ -1,6 +1,7 @@
 import platform
 import traceback
 import array
+import enum
 import x64dbgpy.pluginsdk.x64dbg as x64dbg
 import x64dbgpy.pluginsdk._scriptapi as script
 
@@ -51,7 +52,7 @@ def getProcessThreads():
     return result
 
 def getVaProtect(va):
-    return script.GetProtect(va)
+    return memoryProtect(script.GetProtect(va))
 
 def isValid(va):
     return x64dbg.DbgMemIsValidReadPtr(va)
@@ -112,6 +113,16 @@ def typedVar(type, va):
 
 def typedVarList(va, type, flink):
     notImplemented()
+
+class memoryProtect(enum.Enum):
+    PageExecute = 16
+    PageExecuteWriteCopy = 128
+    PageReadOnly = 2
+    PageReadWrite = 4
+    PageExecuteRead = 32
+    PageExecuteReadWrite = 64
+    PageNoAccess = 1
+    PageWriteCopy = 2
 
 class disasm:
     def __init__(self):
