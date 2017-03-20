@@ -5,7 +5,7 @@ import enum
 import x64dbgpy.pluginsdk.x64dbg as x64dbg
 import x64dbgpy.pluginsdk._scriptapi as script
 
-version = '0.3.2.1'
+version = "0.2.0.29"
 
 def notImplemented():
     try:
@@ -20,11 +20,14 @@ def archValue(x32, x64):
     return x32
 
 def is64bitSystem():
-    return platform.architecture()[0] == '64bit'
+    return platform.architecture()[0] == "64bit"
 
 def dbgCommand(command, suppressOutput = False):
-    print "command: %s" % command
-    notImplemented()
+    if command == "!teb":
+        return "TEB at %x" % getImplicitThread()
+    else:
+        print "command: %s" % command
+        notImplemented()
 
 def dprintln(str, dml = False):
     print str
@@ -33,7 +36,7 @@ def findMemoryRegion(va):
     base = script.GetBase(va)
     size = script.GetSize(va)
     if base == 0 or size == 0:
-        raise MemoryException('No such address 0x%x' % va)
+        raise MemoryException("No such address 0x%x" % va)
     return base, size
 
 def findSymbol(va):
@@ -69,10 +72,14 @@ def loadChars(va, count):
     return script.Read(va, count)
 
 def loadCStr(va):
-    return loadChars(va, 256).rstrip('\0')
+    chars = loadChars(va, 256)
+    index = chars.find('\0')
+    if index != -1:
+        return chars[:index]
+    return chars
 
 def loadDwords(va, count):
-    A = array.array('I')
+    A = array.array("I")
     A.fromstring(script.Read(va, count * 4))
     return A.tolist()
 
@@ -87,24 +94,28 @@ def loadUnicodeString(va):
         va += 4
     Buffer = script.ReadPtr(va)
     if Length > MaximumLength or not script.IsValidPtr(Buffer):
-        raise DbgException('Corrupted UNICODE_STRING structure')
-    A = array.array('u')
+        raise DbgException("Corrupted UNICODE_STRING structure")
+    A = array.array("u")
     A.fromstring(script.Read(Buffer, Length))
     return A.tounicode().rstrip(u'\0')
 
 def loadWChars(va, count):
-    A = array.array('u')
+    A = array.array("u")
     A.fromstring(script.Read(va, count * 2))
     return A.tounicode()
 
 def loadWStr(va):
-    return loadWChars(va, 256 * 2).rstrip(u'\0')
+    wchars = loadWChars(va, 256)
+    index = wchars.find(u'\0')
+    if index != -1:
+        return wchars[:index]
+    return wchars
 
 def ptrDWord(va):
     return script.ReadDword(va)
 
 def writeBytes(va, data):
-    A = array.array('B')
+    A = array.array("B")
     A.fromlist(data)
     script.Write(va, A.tostring())
 
@@ -146,10 +157,8 @@ def typedVarList(va, typename, flink):
         result = []
 
         while va != 0 and len(result) < 10:
-            print "%08x" % va
             entry = typeStruct("_LDR_DATA_TABLE_ENTRY", va)
             entry.BaseDllName = typeStruct("UNICODE_STRING", va + archValue(0x001c, 0x0000))
-            print "%08x" % int(entry.BaseDllName)
             result.append(entry)
             va = script.ReadPtr(va)
             pass
@@ -286,95 +295,36 @@ class MemoryException(DbgException):
 class module:
     def __init__(self, arg):
         if isinstance(arg, basestring):
-            self.name = arg
-            self.base = script.BaseFromName(arg)
+            self._base = script.BaseFromName(arg)
         else:
-            self.base = arg
-            self.name = script.NameFromAddr(arg)
-        self.size = script.SizeFromAddr(self.base)
-
-    def __getattr__(self, item):
-        notImplemented()
-
-    def __str__(self):
-        notImplemented()
+            self._base = arg
+        
+        self._image = script.NameFromAddr(self._base)
+        self._size = script.SizeFromAddr(self._base)
+        
+        index = self._image.rfind(".")
+        if index != -1:
+            self._name = self._image[:index]
+        else:
+            self._name = self._image
+        
+        if self._base == 0 or self._size == 0:
+            raise DbgException("Failed to get module for %s" % arg)
 
     def begin(self):
-        notImplemented()
-
-    def checksum(self):
-        notImplemented()
-
-    def containingRecord(self, arg2, arg3, arg4):
-        notImplemented()
-
-    def end(self):
-        notImplemented()
-
-    def enumSymbols(self, mask):
-        notImplemented()
-
-    def enumTypes(self, mask):
-        notImplemented()
-
-    def findSymbol(self, offset, showDisplacement = True):
-        notImplemented()
-
-    def findSymbolAndDisp(self, offset):
-        # return (name, displacement)
-        notImplemented()
-
-    def getFixedFileInfo(self):
-        notImplemented()
-
-    def getVersion(self):
-        notImplemented()
-
-    def image(self):
-        notImplemented()
-
-    def name(self):
-        notImplemented()
-
-    def offset(self, symbol):
-        notImplemented()
-
-    def queryVersion(self, string):
-        notImplemented()
-
-    def reload(self):
-        notImplemented()
-
-    def rva(self, va):
-        notImplemented()
+        return self._base
 
     def size(self):
-        notImplemented()
+        return self._size
 
-    def sizeof(self, type):
-        notImplemented()
+    def image(self):
+        return self._image
 
-    def symfile(self):
-        notImplemented()
+    def name(self):
+        return self._name
 
-    def timestamp(self):
-        notImplemented()
+    def end(self):
+        return self._base + self._size
 
-    def type(self, name):
-        notImplemented()
-
-    def typedVar(self, offset):
-        notImplemented()
-
-    def typedVarArray(self, offset, name, count):
-        notImplemented()
-
-    def typedVarList(self, offset, name, flink):
-        notImplemented()
-
-    def um(self):
-        # is user module
-        notImplemented()
-
-    def unloaded(self):
-        notImplemented()
+    def typedVar(self, typename, va):
+        return typedVar(typename, va)
