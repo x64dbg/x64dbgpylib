@@ -146,6 +146,32 @@ def typedVar(typename, va):
         teb = typeStruct("_TEB", va)
         teb.Self = va
         return teb
+    elif typename in ("_IMAGE_NT_HEADERS", "_IMAGE_NT_HEADERS64"):
+        ntheaders = typeStruct(typename, va)
+        ntheaders.FileHeader = typedVar("_IMAGE_FILE_HEADER", va + 0x0004)
+        ntheaders.OptionalHeader = typedVar(archValue("_IMAGE_OPTIONAL_HEADER", "_IMAGE_OPTIONAL_HEADER64"), va + 0x0018)
+        return ntheaders
+    elif typename == "_IMAGE_FILE_HEADER":
+        fileheader = typeStruct("_IMAGE_FILE_HEADER", va)
+        fileheader.NumberOfSections = typeInt16(va + 0x0002)
+        fileheader.SizeOfOptionalHeader = typeInt16(va + 0x0010)
+        return fileheader
+    elif typename in ("_IMAGE_OPTIONAL_HEADER", "_IMAGE_OPTIONAL_HEADER64"):
+        optheader = typeStruct(typename, va)
+        optheader.SizeOfCode = typeInt32(va + 0x0004)
+        optheader.AddressOfEntryPoint = typeInt32(va + 0x0010)
+        optheader.BaseOfCode = typeInt32(va + 0x0014)
+        if not is64bitSystem():
+            optheader.BaseOfData = typeInt32(va + 0x0018)
+        optheader.ImageBase = typeInt32(va + archValue(0x001c, 0x0018))
+        optionalheadersize = int(typeInt16(va - 0x0004))
+        optheader.DataDirectory = [typedVar("_IMAGE_DATA_DIRECTORY", i) for i in range(va + archValue(0x0060, 0x0070), va + optionalheadersize, 8)]
+        return optheader
+    elif typename == "_IMAGE_DATA_DIRECTORY":
+        imgdatadir = typeStruct("_IMAGE_DATA_DIRECTORY", va)
+        imgdatadir.VirtualAddress = typeInt32(va)
+        imgdatadir.Size = typeInt32(va + 0x0004)
+        return imgdatadir
     else:
         print "typename: %s, va: %x" % (typename, va)
         notImplemented()
