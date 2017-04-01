@@ -204,7 +204,7 @@ class typeBase(object):
         return self.getAddress()
 
     def __add__(self, other):
-        return int(self) + other
+        return self.getAddress() + other
 
 class typePrimitive(typeBase):
     def __init__(self, name, size, addr = 0):
@@ -239,8 +239,8 @@ class typeInt64(typePrimitive):
         super(typeInt64, self).__init__("uint64_t", 8, addr)
 
 class typePtr(typePrimitive):
-    def __init__(self, type = "void*", addr = 0):
-        super(typePtr, self).__init__(type, archValue(4, 8), addr)
+    def __init__(self, typename = "void*", addr = 0):
+        super(typePtr, self).__init__(typename, archValue(4, 8), addr)
 
     def deref(self):
         return typedVar(self.name[:-1], int(self))
