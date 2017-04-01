@@ -1,7 +1,6 @@
 import platform
 import traceback
 import array
-import enum
 import x64dbgpy.pluginsdk.x64dbg as x64dbg
 import x64dbgpy.pluginsdk._scriptapi as script
 
@@ -23,7 +22,8 @@ def is64bitSystem():
     return platform.architecture()[0] == "64bit"
 
 def dbgCommand(command, suppressOutput = False):
-    if command == "!teb":
+    args = command.split(" ")
+    if args[0] == "!teb":
         return "TEB at %x" % getImplicitThread()
     else:
         print "command: %s" % command
@@ -127,20 +127,18 @@ def ptrPtr(va):
 
 def typedVar(typename, va):
     if typename == "ntdll!_PEB":
-        # TODO: fill in x64 offsets
         peb = typeStruct("_PEB", va)
-        peb.Ldr = typePtr("_PEB_LDR_DATA*", va + archValue(0x000c, 0x0000))
-        peb.ProcessParameters = typePtr("_RTL_USER_PROCESS_PARAMETERS*", va + archValue(0x0010, 0x0000))
-        peb.NumberOfHeaps = typeInt32(va + archValue(0x008c, 0x0000))
-        peb.ProcessHeaps = typePtr("void**", va + archValue(0x0090, 0x0000))
-        peb.OSMajorVersion = typeInt16(va + archValue(0x00a4, 0x0000))
-        peb.OSMinorVersion = typeInt16(va + archValue(0x00a8, 0x0000))
-        peb.OSBuildNumber = typeInt8(va + archValue(0x00ac, 0x0000))
+        peb.Ldr = typePtr("_PEB_LDR_DATA*", va + archValue(0x000c, 0x0018))
+        peb.ProcessParameters = typePtr("_RTL_USER_PROCESS_PARAMETERS*", va + archValue(0x0010, 0x0020))
+        peb.NumberOfHeaps = typeInt32(va + archValue(0x0088, 0x00e8))
+        peb.ProcessHeaps = typePtr("void**", va + archValue(0x0090, 0x00f0))
+        peb.OSMajorVersion = typeInt16(va + archValue(0x00a4, 0x0118))
+        peb.OSMinorVersion = typeInt16(va + archValue(0x00a8, 0x011c))
+        peb.OSBuildNumber = typeInt8(va + archValue(0x00ac, 0x0120))
         return peb
     elif typename == "_PEB_LDR_DATA":
-        # TODO: fill in x64 offsets
         ldr = typeStruct("_PEB_LDR_DATA", va)
-        ldr.InLoadOrderModuleList = typeStruct("_LDR_DATA_TABLE_ENTRY", va + archValue(0x0014, 0x0000))
+        ldr.InLoadOrderModuleList = typeStruct("_LDR_DATA_TABLE_ENTRY", va + archValue(0x000c, 0x0010))
         return ldr
     elif typename == "_TEB":
         teb = typeStruct("_TEB", va)
@@ -178,16 +176,17 @@ def typedVar(typename, va):
 
 def typedVarList(va, typename, flink):
     if typename == "ntdll!_LDR_DATA_TABLE_ENTRY" and flink == "InMemoryOrderLinks.Flink":
-        # TODO: fill in x64 offsets
-        va = script.ReadPtr(int(va) + archValue(0x0008, 0x0000))
+        start = va + archValue(0x0008, 0x0010)
+        va = script.ReadPtr(start)
         result = []
 
-        while va != 0 and len(result) < 10:
+        while va != start and len(result) < 50:
             entry = typeStruct("_LDR_DATA_TABLE_ENTRY", va)
-            entry.BaseDllName = typeStruct("UNICODE_STRING", va + archValue(0x001c, 0x0000))
+            # This is actually _LDR_DATA_TABLE_ENTRY.FullDllName
+            entry.BaseDllName = typeStruct("UNICODE_STRING", va + archValue(0x001c, 0x0038))
             result.append(entry)
             va = script.ReadPtr(va)
-            pass
+
         return result
     else:
         notImplemented()
@@ -250,7 +249,7 @@ class typeStruct(typeBase):
     def __init__(self, name, addr):
         super(typeStruct, self).__init__(name, 0, addr)
 
-class memoryProtect(enum.Enum):
+class memoryProtect(int):
     PageExecute = 16
     PageExecuteWriteCopy = 128
     PageReadOnly = 2
