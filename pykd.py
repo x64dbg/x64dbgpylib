@@ -4,6 +4,8 @@ import array
 import x64dbgpy.pluginsdk.x64dbg as x64dbg
 import x64dbgpy.pluginsdk._scriptapi as script
 
+from collections import deque
+
 version = "0.2.0.29"
 
 def notImplemented():
@@ -76,6 +78,58 @@ def dbgCommand(command, suppressOutput = False):
             output += "_".join(modulename.split(".")[:-1]) + "!" + s.name
         if closestsymboladdr == addr:
             output += "\nExact matches:"
+        return output
+    elif args[0] == "u":
+        output = ""
+        try:
+            addr = int(args[1], 16)
+        except:
+            lnoutput = dbgCommand("ln " + args[1])
+            if "(" in lnoutput.lower():
+                lineparts = lnoutput.split(")")
+                address = lineparts[0].replace("(", "")
+                addr = int(address, 16)
+            else:
+                return output
+        length = int(args[2][1:], 16)
+        disasminstr = x64dbg.DISASM_INSTR()
+        while length > 0:
+            x64dbg.DbgDisasmAt(addr, disasminstr)
+            output += "\n" + "%0.8x" % addr + "\n"
+            addr += disasminstr.instr_size
+            length -= 1
+        return output
+    elif args[0] == "ub":
+        output = ""
+        addr = int(args[1], 16)
+        length = int(args[2][1:], 16)
+        disasminstr = x64dbg.DISASM_INSTR()
+        deq = deque() # stores the base addresses of the found instructions
+        deq.append(addr)
+        banned = {}
+        banned[addr] = []
+        # loop end is just a guess, observed closer results to windbg
+        while len(deq) < (2 * length + 2):
+            x64dbg.DbgDisasmAt(addr, disasminstr)
+            endaddr = addr + disasminstr.instr_size
+            # check if instruction expands till another base address
+            if endaddr in deq and addr not in banned[endaddr]:
+                # remove base addresses if already covered by this instruction
+                while deq[-1] != endaddr:
+                    deq.pop()
+                deq.append(addr)
+                banned[addr] = []
+            elif deq[-1] - addr > 15:
+                if len(deq) == 1:
+                    return ""
+                # base address too far away, won't find instruction, so
+                # add to ban list for this end address
+                bannedaddr = deq.pop()
+                banned[deq[-1]].append(bannedaddr)
+                addr = deq[-1]
+            addr -= 1
+        for i in range(length):
+            output += "\n" + "%0.8x" % deq[length - i] + "\n"
         return output
     else:
         print "command: %s" % command
