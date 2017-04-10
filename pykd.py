@@ -3,6 +3,7 @@ import traceback
 import array
 import x64dbgpy.pluginsdk.x64dbg as x64dbg
 import x64dbgpy.pluginsdk._scriptapi as script
+import x64dbgpy.__breakpoints as breakpoints
 
 from collections import deque
 
@@ -27,6 +28,44 @@ def dbgCommand(command, suppressOutput = False):
     args = command.split(" ")
     if args[0] == "!teb":
         return "TEB at %x" % getImplicitThread()
+    elif args[0] == "ba":
+        bpaccess = args[1]
+        addr = int(args[3], 16)
+        bpsingleton = breakpoints.Breakpoint()
+        if bpaccess == "e":
+            hw_type = bpsingleton.HW_EXECUTE
+        elif bpaccess == "r":
+            hw_type = bpsingleton.HW_ACCESS
+        elif bpaccess == "w":
+            hw_type = bpsingleton.HW_WRITE
+        else:
+            return
+        bpsingleton.add(addr, None, bp_type=bpsingleton.BP_MEMORY, hw_type=hw_type)
+        return
+    elif args[0] == "bc":
+        bpid = int(args[1], 16)
+        bpsingleton = breakpoints.Breakpoint()
+        bpsingleton.remove(bpid)
+        return
+    elif args[0] == "bl":
+        output = ""
+        bpsingleton = breakpoints.Breakpoint()
+        bpkeys = bpsingleton.list()
+        for bpkey in bpkeys:
+            output += "%0.8x X %0.8x \n" % (bpkey, bpkey) # address as key, dummy type
+        return output
+    elif args[0] == "bp":
+        addr = int(args[1], 16)
+        bpsingleton = breakpoints.Breakpoint()
+        bpsingleton.add(addr, None)
+        return
+    elif args[0] == "eb":
+        addr = int(args[1], 16)
+        bytestowrite = [ int(x, 16) for x in args[2:] ]
+        for b in bytestowrite:
+            script.memory.WriteByte(addr, b)
+            addr += 1
+        return
     elif args[0] == "lm":
         output = ""
         modules = script.module.GetList()
