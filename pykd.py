@@ -25,6 +25,58 @@ def dbgCommand(command, suppressOutput = False):
     args = command.split(" ")
     if args[0] == "!teb":
         return "TEB at %x" % getImplicitThread()
+    elif args[0] == "lm":
+        output = ""
+        modules = script.module.GetList()
+        for m in modules:
+            modname = "_".join(m.name.split(".")[:-1])
+            output += "%0.8x %0.8x   %s\n" % (m.base, m.base + m.size, modname)
+        return output
+    elif args[0] == "ln":
+        output = ""
+        addr = None
+        try:
+            addr = int(args[1], 16)
+            info = script.module.InfoFromAddr(addr)
+            modulename = info.name
+            modulebaseaddr = info.base
+        except:
+            functionparts = args[1].split("!")
+            modulename = functionparts[0]
+            functionname = None
+            if len(functionparts) > 1:
+                functionname = functionparts[1]
+            info = script.module.InfoFromName(modulename)
+            modulename = info.name # get full name
+            modulebaseaddr = info.base
+        symbols = list(filter(lambda s: s.mod == modulename, script.symbol.GetList()))
+        symbols = sorted(symbols, key=lambda x: x.rva)
+        if addr:
+            closestsymbol = min(symbols, key=lambda s: abs(modulebaseaddr + s.rva - addr))
+        else:
+            try:
+                if functionname:
+                    closestsymbol = next(s for s in symbols if s.name == functionname)
+                else:
+                    closestsymbol = symbols[0]
+            except:
+                return output
+        closestsymbolindex = symbols.index(closestsymbol)
+        closestsymboladdr = modulebaseaddr + closestsymbol.rva
+        closestsymbols = [ closestsymbol ]
+        if addr and closestsymboladdr > addr:
+            if closestsymbolindex - 1 > 0:
+                closestsymbols.insert(0, symbols[closestsymbolindex - 1])
+        elif closestsymbolindex + 1 < len(symbols):
+            closestsymbols.append(symbols[closestsymbolindex + 1])
+        for i, s in enumerate(closestsymbols):
+            if i > 0:
+                output += " | "
+            output += "(%0.8x) " % (modulebaseaddr + s.rva)
+            output += "_".join(modulename.split(".")[:-1]) + "!" + s.name
+        if closestsymboladdr == addr:
+            output += "\nExact matches:"
+        return output
     else:
         print "command: %s" % command
         notImplemented()
