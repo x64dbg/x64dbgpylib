@@ -130,12 +130,17 @@ def dbgCommand(command, suppressOutput = False):
                 addr = int(address, 16)
             else:
                 return output
-        length = int(args[2][1:], 16)
+        try:
+            length = int(args[2][1:], 16)
+        except:
+            length = int(args[3])
         disasminstr = x64dbg.DISASM_INSTR()
         while length > 0:
             x64dbg.DbgDisasmAt(addr, disasminstr)
-            output += "\n" + "%0.8x" % addr + "\n"
-            addr += disasminstr.instr_size
+            instrsize = disasminstr.instr_size
+            instrbytes = ''.join('%02x' % ord(c) for c in loadBytes(addr, instrsize))
+            output += "\n%0.8x %-15s %s\n" % (addr, instrbytes, disasminstr.instruction)
+            addr += instrsize
             length -= 1
         return output
     elif args[0] == "ub":
@@ -351,6 +356,9 @@ class typeBase(object):
     def __add__(self, other):
         return self.getAddress() + other
 
+    def __radd__(self, other):
+        return  other + self.getAddress()
+
 class typePrimitive(typeBase):
     def __init__(self, name, size, addr = 0):
         super(typePrimitive, self).__init__(name, size, addr)
@@ -409,13 +417,13 @@ class disasm:
         notImplemented()
 
     def __init__(self, offset):
-        notImplemented()
+        self.offset = offset
 
     def __str__(self):
         notImplemented()
 
     def asm(self, code):
-        notImplemented()
+        script.assembler.AssembleMemEx(self.offset, code, False)
 
     def begin(self):
         notImplemented()
