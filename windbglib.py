@@ -46,6 +46,9 @@ import pickle
 import ctypes
 import array
 
+import pluginsdk.bridgemain as brdige
+import pluginsdk._scriptapi as script
+
 global MemoryPages
 global AsmCache
 global OpcodeCache
@@ -156,7 +159,7 @@ def getPEBInfo():
 
 		print " 2. Force download of the Symbols for ntdll.dll"
 		print "    * Connect to the internet, and verify that the symbol path is configured correctly"
-		print "      Assuming that the local symbol path is set to c:\\symbols,"  
+		print "      Assuming that the local symbol path is set to c:\\symbols,"
 		print "      run the following command from within the windbg application folder"
 		print "        symchk /r c:\\windows\\system32\\ntdll.dll /s SRV*c:\\symbols*http://msdl.microsoft.com/download/symbols"
 		print ""
@@ -225,7 +228,7 @@ def addrToInt(address):
 	Return:
 	int - the address value
 	"""
-	
+
 	address = address.replace("\\x","")
 	return hexStrToInt(address)
 
@@ -313,7 +316,7 @@ def isPyKDVersionCompatible(currentversion,requiredversion):
 				return True
 			cnt += 1
 		return True
-		
+
 def checkVersion():
 	pykdurl = "https://github.com/corelan/windbglib/raw/master/pykd/pykd.zip"
 	pykdurl03 = "https://github.com/corelan/windbglib/raw/master/pykd/pykd03.zip"
@@ -349,7 +352,7 @@ def checkVersion():
 			print " NOTE: PyKD v%s requires msdia120.dll, which only gets installed via Visual Studio 2013 (yup, I know)" % currversion
 			print " Alternatively, you can use the copy of msdia120.dll from the pykd.pyd file"
 			print "  (%s), but use this file at your own risk" % pykdurl03
-		print "*******************************************************************************************"		
+		print "*******************************************************************************************"
 	return
 
 def getModulesFromPEB():
@@ -1207,53 +1210,34 @@ class Debugger:
 	Assembly & Disassembly related routes
 	"""
 
-	def disasm(self,address):
+	def disasm(self, address):
 		return self.getOpcode(address)
 
-	def disasmSizeOnly(self,address):
+	def disasmSizeOnly(self, address):
 		return self.getOpcode(address)
 
-	def disasmForward(self,address,depth=0):
+	def disasmForward(self, address, nlines=1):
+		opcode = self.getOpcode(address)
+		for i in xrange(nlines):
+			address += opcode.opsize
+			opcode = self.getOpcode(address)
+		return opcode
+
+	def disasmForwardAddressOnly(self, address, depth):
 		# go to correct location
-		cmd2run = "u 0x%08x L%d" % (address,depth+1)
-		try:
-			disasmlist = pykd.dbgCommand(cmd2run)
-			disasmLinesTmp = disasmlist.split("\n")
-			disasmLines = []
-			for line in disasmLinesTmp:
-				if line.replace(" ","") != "":
-					disasmLines.append(line)
-			lineindex = len(disasmLines)-1
-			if lineindex > -1:
-				asmline = disasmLines[lineindex]
-				pointer = asmline[0:8]
-				if pointer > address:
-					return self.getOpcode(hexStrToInt(pointer))
-				else:
-					return self.getOpcode(address)
-			else:
-				return self.getOpcode(address)
-		except:
-			# probably invalid instruction, so fake by returning itself
-			# caller should check if address is different than what was provided
-			return self.getOpcode(address)
+		return self.disasmForward(address, depth).getAddress()
 
-
-	def disasmForwardAddressOnly(self,address,depth):
-		# go to correct location
-		return self.disasmForward(address,depth).getAddress()
-
-	def disasmBackward(self,address,depth):
+	def disasmBackward(self, address, depth):
 		while True:
-			cmd2run = "ub 0x%08x L%d" % (address,depth)
+			cmd2run = "ub 0x%08x L%d" % (address, depth)
 			try:
 				disasmlist = pykd.dbgCommand(cmd2run)
 				disasmLinesTmp = disasmlist.split("\n")
 				disasmLines = []
 				for line in disasmLinesTmp:
-					if line.replace(" ","") != "":
+					if line.replace(" ", "") != "":
 						disasmLines.append(line)
-				lineindex = len(disasmLines)-depth
+				lineindex = len(disasmLines) - depth
 				if lineindex > -1:
 					asmline = disasmLines[lineindex]
 					pointer = asmline[0:8]
@@ -1267,44 +1251,18 @@ class Debugger:
 					return self.getOpcode(address)
 			depth -= 1
 
-	def assemble(self,instructions):
-		allbytes = ""
-		address = pykd.reg("eip")
-		if not pykd.isValid(address):
-			# assemble somewhere else - let's say at the ntdll entrypoint
-			thismod = pykd.module("ntdll")
-			thismodbase = thismod.begin()
-			ntHeader = getNtHeaders(thismodbase)
-			entrypoint = ntHeader.OptionalHeader.AddressOfEntryPoint
-			address = thismodbase + entrypoint
-		allinstructions = instructions.lower().split("\n")
-		origbytes = pykd.loadChars(address,20)
-		cached = True
-		for thisinstruction in allinstructions:	
-			thisinstruction = thisinstruction.strip(" ").lstrip(" ")
-			if thisinstruction.startswith("ret") and not thisinstruction.startswith("retf"):
-				thisinstruction = thisinstruction.replace("retn","ret").replace("ret","retn")
+	def assemble(self, code, address=0):
+		asm = []
+		for line in code.split('\n'):
+			line = line.strip().split(';')[0]
+			if not line:
+				continue
 
-			if not thisinstruction in self.AsmCache:
-				objdisasm = pykd.disasm(address)
-				try:
-					objdisasm.asm(thisinstruction)
-				except:
-					return ""
-				opc = opcode(address)	
-				thesebytes = opc.getBytes()
-				allbytes += thesebytes
-				self.AsmCache[thisinstruction] = thesebytes
-				cached = False
-			else:
-			# return from cache
-				allbytes += self.AsmCache[thisinstruction]
-		if not cached:
-			putback = "eb 0x%08x " % address
-			restorebytes = [''.join(bin2hex(origbyte)) for origbyte in origbytes] 
-			putback += ' '.join(restorebytes)
-			pykd.dbgCommand(putback)
-		return allbytes
+			res = script.assembler.AssembleEx(address, line)
+			asm.append(res)
+			address += len(res)
+
+		return "".join(asm)
 
 	def getOpcode(self,address):
 		if address in self.OpcodeCache:
@@ -1783,115 +1741,45 @@ class Function:
 		return False
 
 class opcode:
-
-	opsize = 0
-	dump = ""
-
-	def __init__(self,address):
+	def __init__(self, address):
 		self.address = address
-		self.dumpdata = ""
-		self.dump = ""
-		self.instruction = ""
-		self.getDisasm()
-
-	def getBytes(self):
-		self.opsize = len(self.dumpdata) / 2
-		return hex2bin(self.dumpdata)
+		self._basicinfo = brdige.BASIC_INSTRUCTION_INFO()
+		brdige.DbgDisasmFastAt(self.address, self._basicinfo)
+		self.instruction = self._basicinfo.instruction.upper()
+		self.opsize = self._basicinfo.size
 
 	def isJmp(self):
-		if self.instruction.upper().startswith("JMP"):
+		if self.instruction.startswith("JMP"):
 			return True
 		return False
 
 	def isCall(self):
-		if self.instruction.upper().startswith("CALL"):
+		if self.instruction.startswith("CALL"):
 			return True
 		return False
 
 	def isPush(self):
-		if self.instruction.upper().startswith("PUSH"):
+		if self.instruction.startswith("PUSH"):
 			return True
 		return False
 
 	def isPop(self):
-		if self.instruction.upper().startswith("POP"):
+		if self.instruction.startswith("POP"):
 			return True
 		return False
 
 	def isRet(self):
-		if self.instruction.upper().startswith("RET"):
+		if self.instruction.startswith("RET"):
 			return True
 		return False
 
 	def isRep(self):
-		if self.instruction.upper().startswith("REP"):
+		if self.instruction.startswith("REP"):
 			return True
-		return False		
+		return False
 
 	def getDisasm(self):
-		if self.instruction == "":
-			disasmdata = ""
-
-			disasmlines = pykd.dbgCommand("u 0x%08x L 1" % self.address)
-			for thisline in disasmlines.split("\n"):
-				if thisline.lower().startswith("%08x" % self.address):
-					disasmdata = thisline
-					break
-			if disasmdata != "":
-				# 0 -> 7 : address
-				# 8 : space
-				# 9 -> 24 : bytes
-				# 25 -> end : instruction
-				if len(disasmdata) > 25:
-					self.instruction = disasmdata[25:len(disasmdata)]
-					self.dumpdata = disasmdata[9:24].replace(" ","")
-					self.opsize = len(self.dumpdata) / 2
-				addressstring = disasmdata[0:8]
-				self.address = addrToInt(addressstring)
-				self.instruction = self.instruction.replace("   "," ").replace("  "," ")
-				# sanitize instruction to make output immlib compatible. Ugly. A bit.
-				instructionpieces = self.instruction.split(" ")
-				self.instruction = ""
-				extrainfo = ""
-				for instructionpiece in instructionpieces:
-					if ("{" not in instructionpiece and "s:" not in instructionpiece) or ("fs:[" in instructionpiece):
-							self.instruction += instructionpiece
-							self.instruction += " "
-					else:
-						extrainfo = instructionpiece.upper()
-						break
-				self.instruction = self.instruction.strip(" ").upper()
-				self.instruction = self.instruction.replace("   "," ").replace("  "," ")
-				if "SS:" in extrainfo:
-					self.instruction = self.instruction.replace("PTR [","PTR SS:[")
-				if "DS:" in extrainfo:
-					self.instruction = self.instruction.replace("PTR [","PTR DS:[")
-				self.instruction = self.instruction.replace("RET","RETN")	
-				self.instruction = self.instruction.replace(",[",",DWORD PTR DS:[")
-				if ",OFFSET" in self.instruction:
-					# find the value between ()
-					instrparts=self.instruction.split("(")
-					if len(instrparts) > 1:
-						instrparts2 = instrparts[1].split(")")
-						offsetval = instrparts2[0].replace(" ","").strip("H")
-						if offsetval != "":
-							pos = self.instruction.find(",OFFSET")
-							self.instruction = self.instruction[0:pos] + "," + offsetval
-				if "," in self.instruction and self.instruction.endswith("H"):
-					instructionparts = self.instruction.split(",")
-					cnt = 0
-					self.instruction = ""
-					while cnt < len(instructionparts)-1:
-						self.instruction = instructionparts[cnt] + ","
-						cnt += 1
-					self.instruction = self.instruction+ instructionparts[len(instructionparts)-1].strip("H")
-		self.dump = self.instruction
 		return self.instruction
-
-	def getDump(self):
-		if self.dumpdata == "":
-			self.getDisasm()
-		return self.dumpdata
 
 	def getAddress(self):
 		return self.address

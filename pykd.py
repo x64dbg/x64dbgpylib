@@ -412,58 +412,6 @@ class memoryProtect(int):
     PageNoAccess = 1
     PageWriteCopy = 2
 
-class disasm:
-    def __init__(self):
-        notImplemented()
-
-    def __init__(self, offset):
-        self.offset = offset
-
-    def __str__(self):
-        notImplemented()
-
-    def asm(self, code):
-        script.assembler.AssembleMemEx(self.offset, code, False)
-
-    def begin(self):
-        notImplemented()
-
-    def current(self):
-        notImplemented()
-
-    def disasm(self):
-        notImplemented()
-
-    def disasm(self, offset):
-        notImplemented()
-
-    def ea(self):
-        notImplemented()
-
-    def findOffset(self, arg2):
-        notImplemented()
-
-    def instruction(self):
-        notImplemented()
-
-    def jump(self, arg2):
-        notImplemented()
-
-    def jumprel(self, arg2):
-        notImplemented()
-
-    def length(self):
-        notImplemented()
-
-    def opcode(self):
-        notImplemented()
-
-    def opmnemo(self):
-        notImplemented()
-
-    def reset(self):
-        notImplemented()
-
 class DbgException(Exception):
     pass
 
@@ -476,16 +424,16 @@ class module:
             self._base = script.BaseFromName(arg)
         else:
             self._base = arg
-        
+
         self._image = script.NameFromAddr(self._base)
         self._size = script.SizeFromAddr(self._base)
-        
+
         index = self._image.rfind(".")
         if index != -1:
             self._name = self._image[:index]
         else:
             self._name = self._image
-        
+
         if self._base == 0 or self._size == 0:
             raise DbgException("Failed to get module for %s" % arg)
 
