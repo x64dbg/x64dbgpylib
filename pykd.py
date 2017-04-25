@@ -1,6 +1,7 @@
 import platform
 import traceback
 import array
+import fnmatch
 import x64dbgpy.pluginsdk.x64dbg as x64dbg
 import x64dbgpy.pluginsdk._scriptapi as script
 import x64dbgpy.__breakpoints as breakpoints
@@ -174,6 +175,19 @@ def dbgCommand(command, suppressOutput = False):
             addr -= 1
         for i in range(length):
             output += "\n" + "%0.8x" % deq[length - i] + "\n"
+        return output
+    elif args[0] == "x":
+        output = ""
+        functionparts = args[1].split("!")
+        shortname = functionparts[0]
+        crit = functionparts[1]
+        info = script.module.InfoFromName(shortname)
+        modulename = info.name # get full name
+        symbols = script.symbol.GetList()
+        symbols = list(filter(lambda s: s.mod == modulename and fnmatch.fnmatch(s.name, crit), symbols))
+        symbols = sorted(symbols, key=lambda x: x.rva)
+        for s in symbols:
+            output += "%0.8x%s%s!%s\n" % (info.base + s.rva, " " * 10, shortname, s.name)
         return output
     else:
         print "command: %s" % command
