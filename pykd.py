@@ -116,7 +116,7 @@ def dbgCommand(command, suppressOutput = False):
                 output += " | "
             output += "(%0.8x) " % (modulebaseaddr + s.rva)
             output += "_".join(modulename.split(".")[:-1]) + "!" + s.name
-        if closestsymboladdr == addr:
+        if closestsymboladdr == addr or functionname:
             output += "\nExact matches:"
         return output
     elif args[0] == "u":
