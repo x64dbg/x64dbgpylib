@@ -1273,7 +1273,7 @@ class Debugger:
             asm.append(res)
             address += len(res)
 
-        return "".join(asm)
+        return binascii.unhexlify("".join(asm))
 
     def getOpcode(self, address):
         if address in self.OpcodeCache:
