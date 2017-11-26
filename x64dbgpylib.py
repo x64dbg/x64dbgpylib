@@ -1683,7 +1683,7 @@ class wpage():
             sectiontoreturn = ""
             imagename = getModuleFromAddress(self.begin)
             if not imagename == None:
-                thismod = pykd.module(imagename)
+                thismod = pykd.module(imagename.name())
                 thismodbase = thismod.begin()
                 thismodend = thismod.end()
                 if self.begin >= thismodbase and self.begin <= thismodend:
