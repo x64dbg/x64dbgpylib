@@ -380,9 +380,9 @@ def getModulesFromPEB():
     # http://www.nirsoft.net/kernel_struct/vista/PEB_LDR_DATA.html
     # http://www.nirsoft.net/kernel_struct/vista/LDR_DATA_TABLE_ENTRY.html
     # The usage of _LDR_DATA_TABLE_ENTRY.SizeOfImage is very confusing and appears to actually contain the module base
-    offset = 0x20
+    offset = 0x10
     if arch == 64:
-        offset = 0x40
+        offset = 0x30
     moduleLst = pykd.typedVarList(peb.Ldr.deref().InLoadOrderModuleList, "ntdll!_LDR_DATA_TABLE_ENTRY",
                                   "InMemoryOrderLinks.Flink")
     if len(PEBModList) == 0:
@@ -1269,6 +1269,7 @@ class Debugger:
             if not line:
                 continue
 
+            # XXX AssembleEx can't handle RETN, I think.
             res = script.assembler.AssembleEx(address, line)
             asm.append(res)
             address += len(res)
@@ -1794,6 +1795,15 @@ class opcode:
 
     def getAddress(self):
         return self.address
+
+    def getDump(self):
+        # XXX: LoadChars is too slow to be usable right now!!
+        # if self.dump:
+        #     return self.dump
+        # else:
+        #     self.dump = binascii.hexlify(pykd.loadChars(self.address, self.opsize))
+        #     return self.dump
+        return ""
 
 
 class wthread:
