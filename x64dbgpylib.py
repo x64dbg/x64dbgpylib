@@ -1269,7 +1269,7 @@ class Debugger:
             if not line:
                 continue
 
-            # XXX AssembleEx can't handle RETN, I think.
+            line = line.replace("RETN", "RET")
             res = script.assembler.AssembleEx(address, line)
             asm.append(res)
             address += len(res)
