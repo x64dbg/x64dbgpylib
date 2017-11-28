@@ -45,6 +45,7 @@ import traceback
 import pickle
 import ctypes
 import array
+import pefile
 
 import x64dbgpy.pluginsdk.x64dbg as x64dbg
 import x64dbgpy.pluginsdk._scriptapi as script
@@ -1109,8 +1110,10 @@ class Debugger:
             getModulesFromPEB()
         try:
             thismod = None
+            
             if modulename in PEBModList:
                 modentry = PEBModList[modulename]
+                fullpath = modentry[1]
                 thismod = pykd.module(modulename)
 
             else:
@@ -1121,6 +1124,7 @@ class Debugger:
                     # 1 : path
                     if modulename == modrecord[0]:
                         thismod = pykd.module(modentry)
+                        fullpath = modrecord[1]
                         break
 
             if thismod == None:
@@ -1143,7 +1147,11 @@ class Debugger:
             except:
                 thismodversion = ""
             ntHeader = getNtHeaders(thismodbase)
-            preferredbase = ntHeader.OptionalHeader.ImageBase
+
+            # Get preferred ImageBase from file on disk 
+            pe = pefile.PE(fullpath, fast_load = True)
+            preferredbase = pe.OPTIONAL_HEADER.ImageBase
+
             entrypoint = ntHeader.OptionalHeader.AddressOfEntryPoint
             codebase = ntHeader.OptionalHeader.BaseOfCode
             if getArchitecture() == 64:
