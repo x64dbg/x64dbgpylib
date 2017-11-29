@@ -374,15 +374,16 @@ def checkVersion():
 
 def getModulesFromPEB():
     global PEBModList
+    PEBModList = {}
     peb = getPEBInfo()
     imagenames = []
     # http://www.nirsoft.net/kernel_struct/vista/PEB.html
     # http://www.nirsoft.net/kernel_struct/vista/PEB_LDR_DATA.html
     # http://www.nirsoft.net/kernel_struct/vista/LDR_DATA_TABLE_ENTRY.html
     # The usage of _LDR_DATA_TABLE_ENTRY.SizeOfImage is very confusing and appears to actually contain the module base
-    offset = 0x20
+    offset = 0x10
     if arch == 64:
-        offset = 0x40
+        offset = 0x30
     moduleLst = pykd.typedVarList(peb.Ldr.deref().InLoadOrderModuleList, "ntdll!_LDR_DATA_TABLE_ENTRY",
                                   "InMemoryOrderLinks.Flink")
     if len(PEBModList) == 0:
@@ -573,6 +574,22 @@ def getModuleFromAddress(address):
                 return thismod
 
     return None
+
+def getImageBaseOnDisk(fullpath):
+    with open(fullpath, "rb") as pe: 
+        data = pe.read()
+        nt_header_offset = struct.unpack("<I", data[0x3c:0x40])[0]
+
+        optional_header_offset = nt_header_offset + 0x18
+        magic = struct.unpack("<H", data[optional_header_offset:optional_header_offset+2])[0]
+        if magic == 0x10b:
+            #32bit
+            imageBase = struct.unpack("<I", data[optional_header_offset+28:optional_header_offset+28+4])[0]
+        else:
+            # 64bit
+            imageBase = struct.unpack("<Q", data[optional_header_offset+24:optional_header_offset+24+8])[0]
+
+    return imageBase
 
 
 # Classes
@@ -1109,8 +1126,10 @@ class Debugger:
             getModulesFromPEB()
         try:
             thismod = None
+            
             if modulename in PEBModList:
                 modentry = PEBModList[modulename]
+                fullpath = modentry[1]
                 thismod = pykd.module(modulename)
 
             else:
@@ -1121,6 +1140,7 @@ class Debugger:
                     # 1 : path
                     if modulename == modrecord[0]:
                         thismod = pykd.module(modentry)
+                        fullpath = modrecord[1]
                         break
 
             if thismod == None:
@@ -1143,7 +1163,10 @@ class Debugger:
             except:
                 thismodversion = ""
             ntHeader = getNtHeaders(thismodbase)
-            preferredbase = ntHeader.OptionalHeader.ImageBase
+
+            # Get preferred ImageBase from file on disk 
+            preferredbase = getImageBaseOnDisk(fullpath)
+
             entrypoint = ntHeader.OptionalHeader.AddressOfEntryPoint
             codebase = ntHeader.OptionalHeader.BaseOfCode
             if getArchitecture() == 64:
@@ -1170,13 +1193,11 @@ class Debugger:
         return wmod
 
     def getAllModules(self):
-        if len(self.allmodules) == 0:
-            if len(PEBModList) == 0:
-                getModulesFromPEB()
-            for imagename in PEBModList:
-                thismodname = PEBModList[imagename][0]
-                wmodobject = self.getModule(imagename)
-                self.allmodules[thismodname] = wmodobject
+        getModulesFromPEB()
+        for imagename in PEBModList:
+            thismodname = PEBModList[imagename][0]
+            wmodobject = self.getModule(imagename)
+            self.allmodules[thismodname] = wmodobject
         return self.allmodules
 
     def getImageNameForModule(self, modulename):
@@ -1269,11 +1290,12 @@ class Debugger:
             if not line:
                 continue
 
+            line = line.replace("RETN", "RET")
             res = script.assembler.AssembleEx(address, line)
             asm.append(res)
             address += len(res)
 
-        return "".join(asm)
+        return binascii.unhexlify("".join(asm))
 
     def getOpcode(self, address):
         if address in self.OpcodeCache:
@@ -1682,7 +1704,7 @@ class wpage():
             sectiontoreturn = ""
             imagename = getModuleFromAddress(self.begin)
             if not imagename == None:
-                thismod = pykd.module(imagename)
+                thismod = pykd.module(imagename.name())
                 thismodbase = thismod.begin()
                 thismodend = thismod.end()
                 if self.begin >= thismodbase and self.begin <= thismodend:
@@ -1794,6 +1816,15 @@ class opcode:
 
     def getAddress(self):
         return self.address
+
+    def getDump(self):
+        # XXX: LoadChars is too slow to be usable right now!!
+        # if self.dump:
+        #     return self.dump
+        # else:
+        #     self.dump = binascii.hexlify(pykd.loadChars(self.address, self.opsize))
+        #     return self.dump
+        return ""
 
 
 class wthread:
