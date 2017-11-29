@@ -45,7 +45,6 @@ import traceback
 import pickle
 import ctypes
 import array
-import pefile
 
 import x64dbgpy.pluginsdk.x64dbg as x64dbg
 import x64dbgpy.pluginsdk._scriptapi as script
@@ -375,6 +374,7 @@ def checkVersion():
 
 def getModulesFromPEB():
     global PEBModList
+    PEBModList = {}
     peb = getPEBInfo()
     imagenames = []
     # http://www.nirsoft.net/kernel_struct/vista/PEB.html
@@ -574,6 +574,22 @@ def getModuleFromAddress(address):
                 return thismod
 
     return None
+
+def getImageBaseOnDisk(fullpath):
+    with open(fullpath, "rb") as pe: 
+        data = pe.read()
+        nt_header_offset = struct.unpack("<I", data[0x3c:0x40])[0]
+
+        optional_header_offset = nt_header_offset + 0x18
+        magic = struct.unpack("<H", data[optional_header_offset:optional_header_offset+2])[0]
+        if magic == 0x10b:
+            #32bit
+            imageBase = struct.unpack("<I", data[optional_header_offset+28:optional_header_offset+28+4])[0]
+        else:
+            # 64bit
+            imageBase = struct.unpack("<Q", data[optional_header_offset+24:optional_header_offset+24+8])[0]
+
+    return imageBase
 
 
 # Classes
@@ -1149,8 +1165,7 @@ class Debugger:
             ntHeader = getNtHeaders(thismodbase)
 
             # Get preferred ImageBase from file on disk 
-            pe = pefile.PE(fullpath, fast_load = True)
-            preferredbase = pe.OPTIONAL_HEADER.ImageBase
+            preferredbase = getImageBaseOnDisk(fullpath)
 
             entrypoint = ntHeader.OptionalHeader.AddressOfEntryPoint
             codebase = ntHeader.OptionalHeader.BaseOfCode
@@ -1178,13 +1193,11 @@ class Debugger:
         return wmod
 
     def getAllModules(self):
-        if len(self.allmodules) == 0:
-            if len(PEBModList) == 0:
-                getModulesFromPEB()
-            for imagename in PEBModList:
-                thismodname = PEBModList[imagename][0]
-                wmodobject = self.getModule(imagename)
-                self.allmodules[thismodname] = wmodobject
+        getModulesFromPEB()
+        for imagename in PEBModList:
+            thismodname = PEBModList[imagename][0]
+            wmodobject = self.getModule(imagename)
+            self.allmodules[thismodname] = wmodobject
         return self.allmodules
 
     def getImageNameForModule(self, modulename):
