@@ -891,6 +891,9 @@ class Debugger:
     def getDebuggedName(self):
         # http://www.nirsoft.net/kernel_struct/vista/PEB.html
         # http://www.nirsoft.net/kernel_struct/vista/RTL_USER_PROCESS_PARAMETERS.html
+        if not pykd.isDebugging():
+            return ""
+
         peb = getPEBInfo()
         ProcessParameters = peb.ProcessParameters
         offset = 0x38
@@ -904,6 +907,9 @@ class Debugger:
     def getDebuggedPid(self):
         # http://www.nirsoft.net/kernel_struct/vista/TEB.html
         # http://www.nirsoft.net/kernel_struct/vista/CLIENT_ID.html
+        if not pykd.isDebugging():
+            return 0
+
         teb = getTEBAddress()
         offset = 0x20
         if arch == 64:
