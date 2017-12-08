@@ -295,6 +295,8 @@ def hex2bin(pattern):
     pattern = pattern.replace("\'", "")
     return ''.join([binascii.a2b_hex(i + j) for i, j in zip(pattern[0::2], pattern[1::2])])
 
+def isDebugging():
+    return x64dbg.DbgIsDebugging()
 
 def getPyKDVersion():
     currentversion = pykd.version
@@ -891,7 +893,7 @@ class Debugger:
     def getDebuggedName(self):
         # http://www.nirsoft.net/kernel_struct/vista/PEB.html
         # http://www.nirsoft.net/kernel_struct/vista/RTL_USER_PROCESS_PARAMETERS.html
-        if not pykd.isDebugging():
+        if not isDebugging():
             return ""
 
         peb = getPEBInfo()
@@ -907,7 +909,7 @@ class Debugger:
     def getDebuggedPid(self):
         # http://www.nirsoft.net/kernel_struct/vista/TEB.html
         # http://www.nirsoft.net/kernel_struct/vista/CLIENT_ID.html
-        if not pykd.isDebugging():
+        if not isDebugging():
             return 0
 
         teb = getTEBAddress()
