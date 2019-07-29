@@ -897,7 +897,7 @@ class Debugger:
         if arch == 64:
             offset = 0x60
         # ProcessParameters + offset = _RTL_USER_PROCESS_PARAMETERS.ImagePathName(_UNICODE_STRING)
-        sImageFile = pykd.loadUnicodeString(ProcessParameters + offset).encode("utf8")
+        sImageFile = pykd.loadUnicodeString(int(ProcessParameters) + offset).encode("utf8")
         sImageFilepieces = sImageFile.split("\\")
         return sImageFilepieces[len(sImageFilepieces) - 1]
 
